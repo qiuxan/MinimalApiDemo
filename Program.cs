@@ -1,9 +1,12 @@
+using MinimalApiDemo.Services;
+
 var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container.
 // Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
+builder.Services.AddSingleton<IPostService, PostService>();
 
 var app = builder.Build();
 
@@ -44,23 +47,29 @@ var list = new List<Post>()
 };
 
 
-app.MapGet("/posts",() => list).WithName("GetPosts").WithOpenApi().WithTags("Posts");
+app.MapGet("/posts", async( IPostService postService) => {
+
+    var posts = await postService.GetPosts();
+    return posts;
+}
+
+).WithName("GetPosts").WithOpenApi().WithTags("Posts");
 
 app.MapPost(
     "/posts",
-    (Post post) =>
+    async(IPostService postService,Post post) =>
         {
-            list.Add(post);
-            return Results.Created($"/posts/{post.Id}", post);
+            var newPost = await postService.CreatePost(post);
+            return Results.Created($"/posts/{post.Id}", newPost);
         }
     ).WithName("CreatePost").WithOpenApi().WithTags("Posts");
 
 
 app.MapGet(
     "/posts/{id}",
-    (int id) =>
+    async(IPostService postService,int id) =>
         {
-            var post = list.FirstOrDefault(p => p.Id == id);
+            var post = await postService.GetPost(id);
             return post == null ? Results.NotFound() : Results.Ok(post);
         })
     .WithName("GetPost").WithOpenApi().WithTags("Posts");
@@ -68,29 +77,19 @@ app.MapGet(
 
 app.MapPut(
     "/posts/{id}", 
-    (int id, Post post) =>
+    async(IPostService postService,int id, Post post) =>
         {
-            var index = list.FindIndex(p => p.Id == id);
-            if (index == -1)
-            {
-                return Results.NotFound();
-            }
-            list[index] = post;
-            return Results.Ok(post);
+           var updatedPost = await postService.UpdatePost(id, post);
+            return Results.Ok(updatedPost);
         })
     .WithName("UpdatePost").WithOpenApi().WithTags("Posts");
 
 
 app.MapDelete(
     "/posts/{id}", 
-    (int id) =>
+    async(IPostService postService,int id) =>
         {
-            var post = list.FirstOrDefault(p => p.Id == id);
-            if (post == null)
-            {
-                return Results.NotFound();
-            }
-            list.Remove(post);
+            postService.DeletePost(id);
             return Results.Ok();
         }).WithName("DeletePost").WithOpenApi().WithTags("Posts");
 
